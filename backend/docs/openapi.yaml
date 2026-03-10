@@ -1,0 +1,3960 @@
+openapi: 3.0.3
+info:
+  title: Mall Admin System API
+  description: |
+    电商管理系统后端 API 文档。
+
+    ## 认证
+    除公开端点外，所有请求需在 Header 中携带 JWT Bearer Token：
+    ```
+    Authorization: Bearer <access_token>
+    ```
+
+    ## 统一响应格式
+    - 成功响应包含 `success: true`、`data` 和 `meta` 字段
+    - 错误响应包含 `success: false`、`error` 和 `meta` 字段
+    - 分页响应的 `data` 中包含 `items` 和 `pagination`
+
+    ## 错误码体系
+    | 范围 | 模块 |
+    |------|------|
+    | 1000-1999 | 通用错误 |
+    | 2000-2999 | 产品相关 |
+    | 3000-3999 | 订单相关 |
+    | 4000-4999 | 用户相关 |
+    | 5000-5999 | 营销相关 |
+
+    ## 幂等性
+    对 POST/PUT 请求可通过 `X-Idempotency-Key` 请求头实现幂等性。
+
+    ## CSRF 防护
+    状态变更请求（POST/PUT/DELETE）需在请求头中附加 `X-CSRF-Token`。
+  version: 1.0.0
+  contact:
+    name: Mall Admin Team
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: 本地开发环境
+
+tags:
+  - name: Auth
+    description: 认证相关接口
+  - name: Products
+    description: 产品管理
+  - name: Categories
+    description: 分类管理
+  - name: Brands
+    description: 品牌管理
+  - name: Attributes
+    description: 属性管理
+  - name: Orders
+    description: 订单管理
+  - name: Returns
+    description: 退货管理
+  - name: Inventory
+    description: 库存管理
+  - name: Flash Sales
+    description: 秒杀活动管理
+  - name: Coupons
+    description: 优惠券管理
+  - name: Recommendations
+    description: 推荐位管理
+  - name: Advertisements
+    description: 广告管理
+  - name: Users
+    description: 用户管理
+  - name: Roles
+    description: 角色与权限管理
+  - name: Menus
+    description: 菜单管理
+  - name: Audit Logs
+    description: 审计日志
+  - name: Dashboard
+    description: 仪表板统计
+  - name: Health
+    description: 健康检查
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Access Token
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+      description: 页码
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      description: 每页数量
+    SortOrderParam:
+      name: sortOrder
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+      description: 排序方向
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 资源 UUID
+
+  schemas:
+    Meta:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-03-06T10:00:00Z"
+        requestId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        version:
+          type: string
+          example: "v1"
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 100
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        totalPages:
+          type: integer
+          example: 5
+        hasNext:
+          type: boolean
+          example: true
+        hasPrev:
+          type: boolean
+          example: false
+
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: "ERR_1001"
+        message:
+          type: string
+          example: "请求参数无效"
+        details:
+          type: object
+        field:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        meta:
+          $ref: '#/components/schemas/Meta'
+
+    # --- Auth ---
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        username:
+          type: string
+          example: admin
+        email:
+          type: string
+          format: email
+          example: admin@mall.com
+        password:
+          type: string
+          example: "Admin123!"
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          example: 900
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+
+    # --- Product ---
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "iPhone 14 Pro"
+        slug:
+          type: string
+          example: "iphone-14-pro"
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        brandId:
+          type: string
+          format: uuid
+        price:
+          type: number
+          format: decimal
+          example: 999.99
+        originalPrice:
+          type: number
+          format: decimal
+          example: 1099.99
+        stock:
+          type: integer
+          example: 100
+        sku:
+          type: string
+          example: "IP14P-256-BLK"
+        images:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [draft, active, inactive, archived]
+          example: active
+        isFeatured:
+          type: boolean
+        viewCount:
+          type: integer
+        saleCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateProductRequest:
+      type: object
+      required: [name, price]
+      properties:
+        name:
+          type: string
+          example: "iPhone 14 Pro"
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        brandId:
+          type: string
+          format: uuid
+        price:
+          type: number
+          minimum: 0.01
+          example: 999.99
+        originalPrice:
+          type: number
+        stock:
+          type: integer
+          minimum: 0
+          example: 100
+        sku:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        status:
+          type: string
+          enum: [draft, active, inactive]
+        isFeatured:
+          type: boolean
+
+    # --- Category ---
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "电子产品"
+        slug:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        level:
+          type: integer
+        sortOrder:
+          type: integer
+        imageUrl:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: "电子产品"
+        slug:
+          type: string
+        description:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        sortOrder:
+          type: integer
+        imageUrl:
+          type: string
+        isActive:
+          type: boolean
+          default: true
+
+    # --- Brand ---
+    Brand:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Apple"
+        slug:
+          type: string
+        logoUrl:
+          type: string
+        description:
+          type: string
+        website:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        productCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateBrandRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: "Apple"
+        description:
+          type: string
+        logoUrl:
+          type: string
+        websiteUrl:
+          type: string
+        isActive:
+          type: boolean
+          default: true
+        sortOrder:
+          type: integer
+
+    # --- Attribute ---
+    Attribute:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "颜色"
+        slug:
+          type: string
+        type:
+          type: string
+          enum: [text, select, multiselect, color, number, boolean]
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              label:
+                type: string
+        isRequired:
+          type: boolean
+        isFilterable:
+          type: boolean
+        isVisible:
+          type: boolean
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    # --- Order ---
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+          example: "ORD-20260306-001"
+        customerId:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        totalAmount:
+          type: number
+          format: decimal
+          example: 1299.99
+        discountAmount:
+          type: number
+          format: decimal
+        shippingFee:
+          type: number
+          format: decimal
+        finalAmount:
+          type: number
+          format: decimal
+        status:
+          type: string
+          enum: [pending, confirmed, paid, processing, shipped, delivered, cancelled]
+          example: pending
+        paymentStatus:
+          type: string
+          enum: [unpaid, paid, refunded]
+        paymentMethod:
+          type: string
+        shippingAddress:
+          type: object
+        trackingNumber:
+          type: string
+        notes:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        productName:
+          type: string
+        productImage:
+          type: string
+        sku:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+          format: decimal
+        subtotal:
+          type: number
+          format: decimal
+
+    CreateOrderRequest:
+      type: object
+      required: [items, shippingAddress]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId:
+                type: string
+                format: uuid
+              quantity:
+                type: integer
+                minimum: 1
+        shippingAddress:
+          type: object
+          required: [name, phone, address]
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            address:
+              type: string
+            city:
+              type: string
+            zipCode:
+              type: string
+        notes:
+          type: string
+        couponCode:
+          type: string
+
+    UpdateOrderStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [confirmed, paid, processing, shipped, delivered]
+        trackingNumber:
+          type: string
+        notes:
+          type: string
+
+    OrderAnalytics:
+      type: object
+      properties:
+        totalOrders:
+          type: integer
+        totalRevenue:
+          type: number
+          format: decimal
+        averageOrderValue:
+          type: number
+          format: decimal
+        statusDistribution:
+          type: object
+          additionalProperties:
+            type: integer
+        trend:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              orders:
+                type: integer
+              revenue:
+                type: number
+
+    # --- Return ---
+    ReturnRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        returnNumber:
+          type: string
+        orderId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        status:
+          type: string
+          enum: [pending, approved, refunding, completed, rejected]
+        images:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateReturnRequest:
+      type: object
+      required: [orderId, reason, amount]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+          minimum: 0.01
+        images:
+          type: array
+          items:
+            type: string
+
+    # --- Flash Sale ---
+    FlashSale:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "双十一秒杀"
+        description:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, active, ended]
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlashSaleProduct'
+        createdAt:
+          type: string
+          format: date-time
+
+    FlashSaleProduct:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        flashPrice:
+          type: number
+          format: decimal
+        stockLimit:
+          type: integer
+        stockUsed:
+          type: integer
+        sortOrder:
+          type: integer
+
+    CreateFlashSaleRequest:
+      type: object
+      required: [name, startTime, endTime]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+
+    # --- Coupon ---
+    Coupon:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: "SAVE20"
+        name:
+          type: string
+        type:
+          type: string
+          enum: [fixed, percentage]
+        value:
+          type: number
+          format: decimal
+        minAmount:
+          type: number
+          format: decimal
+        maxDiscount:
+          type: number
+          format: decimal
+          nullable: true
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        usageLimit:
+          type: integer
+          nullable: true
+        usedCount:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateCouponRequest:
+      type: object
+      required: [code, name, type, value, startDate, endDate]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [fixed, percentage]
+        value:
+          type: number
+          minimum: 0.01
+        minAmount:
+          type: number
+          default: 0
+        maxDiscount:
+          type: number
+          nullable: true
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        usageLimit:
+          type: integer
+          nullable: true
+        isActive:
+          type: boolean
+          default: true
+
+    CouponStats:
+      type: object
+      properties:
+        totalUsed:
+          type: integer
+        totalDiscount:
+          type: number
+          format: decimal
+        usageRate:
+          type: number
+          format: float
+
+    # --- Recommendation ---
+    Recommendation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [brand, new, popular, topic]
+        productId:
+          type: string
+          format: uuid
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    # --- Advertisement ---
+    Advertisement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        imageUrl:
+          type: string
+        linkUrl:
+          type: string
+        position:
+          type: string
+          example: "home_banner"
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        sortOrder:
+          type: integer
+        clickCount:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateAdvertisementRequest:
+      type: object
+      required: [name, imageUrl, position, startTime, endTime]
+      properties:
+        name:
+          type: string
+        imageUrl:
+          type: string
+        linkUrl:
+          type: string
+        position:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+
+    # --- User ---
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          example: "admin"
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, banned]
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        lastLoginAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        password:
+          type: string
+          minLength: 8
+        roleIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    # --- Role ---
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "admin"
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        createdAt:
+          type: string
+          format: date-time
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        resource:
+          type: string
+          example: "products"
+        actions:
+          type: array
+          items:
+            type: string
+          example: ["read", "write", "delete"]
+        description:
+          type: string
+
+    # --- Menu ---
+    Menu:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "产品管理"
+        path:
+          type: string
+          example: "/products"
+        icon:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        sortOrder:
+          type: integer
+        permissionKey:
+          type: string
+        isActive:
+          type: boolean
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Menu'
+
+    # --- Audit Log ---
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          example: "create"
+        resource:
+          type: string
+          example: "products"
+        resourceId:
+          type: string
+        details:
+          type: object
+        ipAddress:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # --- Dashboard ---
+    DashboardStats:
+      type: object
+      properties:
+        totalSales:
+          type: number
+          format: decimal
+        totalOrders:
+          type: integer
+        totalUsers:
+          type: integer
+        totalProducts:
+          type: integer
+        salesGrowth:
+          type: number
+          format: float
+        ordersGrowth:
+          type: number
+          format: float
+        usersGrowth:
+          type: number
+          format: float
+
+    SalesTrend:
+      type: object
+      properties:
+        date:
+          type: string
+        sales:
+          type: number
+          format: decimal
+        orders:
+          type: integer
+
+    TopProduct:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        image:
+          type: string
+        saleCount:
+          type: integer
+        revenue:
+          type: number
+          format: decimal
+
+  responses:
+    BadRequest:
+      description: 请求参数无效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "ERR_1001"
+              message: "请求参数无效"
+            meta:
+              timestamp: "2026-03-06T10:00:00Z"
+              requestId: "550e8400-e29b-41d4-a716-446655440000"
+              version: "v1"
+    Unauthorized:
+      description: 未认证
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "ERR_1016"
+              message: "认证失败"
+            meta:
+              timestamp: "2026-03-06T10:00:00Z"
+              requestId: "550e8400-e29b-41d4-a716-446655440000"
+              version: "v1"
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "ERR_1015"
+              message: "权限不足"
+            meta:
+              timestamp: "2026-03-06T10:00:00Z"
+              requestId: "550e8400-e29b-41d4-a716-446655440000"
+              version: "v1"
+    NotFound:
+      description: 资源未找到
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "ERR_1002"
+              message: "资源未找到"
+            meta:
+              timestamp: "2026-03-06T10:00:00Z"
+              requestId: "550e8400-e29b-41d4-a716-446655440000"
+              version: "v1"
+    TooManyRequests:
+      description: 请求频率超限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "ERR_1005"
+              message: "请求频率超限"
+            meta:
+              timestamp: "2026-03-06T10:00:00Z"
+              requestId: "550e8400-e29b-41d4-a716-446655440000"
+              version: "v1"
+
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ==================== Auth ====================
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: 用户登录
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: admin
+              password: "Admin123!"
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AuthTokens'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 刷新 Access Token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token 刷新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AuthTokens'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 用户登出
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Logged out successfully"
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      summary: 从所有设备登出
+      responses:
+        '200':
+          description: 全部登出成功
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: 获取当前用户信息
+      responses:
+        '200':
+          description: 当前用户信息
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==================== Products ====================
+  /products:
+    get:
+      tags: [Products]
+      summary: 获取产品列表
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: created_at
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, active, inactive, archived]
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: brandId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: isFeatured
+          in: query
+          schema:
+            type: boolean
+        - name: inStock
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: 产品列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Product'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Products]
+      summary: 创建产品
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: 产品创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: 获取产品详情
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 产品详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Products]
+      summary: 更新产品
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: X-Idempotency-Key
+          in: header
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '200':
+          description: 产品更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Products]
+      summary: 删除产品
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 产品删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /products/bulk-update-status:
+    post:
+      tags: [Products]
+      summary: 批量更新产品状态
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productIds, status]
+              properties:
+                productIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                status:
+                  type: string
+                  enum: [active, inactive, archived]
+      responses:
+        '200':
+          description: 批量更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      updatedCount:
+                        type: integer
+                      productIds:
+                        type: array
+                        items:
+                          type: string
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /products/{id}/images:
+    post:
+      tags: [Products]
+      summary: 上传产品图片
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                altText:
+                  type: string
+                isPrimary:
+                  type: boolean
+      responses:
+        '200':
+          description: 图片上传成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ==================== Categories ====================
+  /categories:
+    get:
+      tags: [Categories]
+      summary: 获取分类列表
+      security: []
+      parameters:
+        - name: parentId
+          in: query
+          schema:
+            type: string
+          description: 父分类 ID，传 'null' 获取根分类
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+        - name: includeChildren
+          in: query
+          schema:
+            type: boolean
+          description: 是否构建树形结构
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 分类列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Categories]
+      summary: 创建分类
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+      responses:
+        '201':
+          description: 分类创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Category'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /categories/{id}:
+    get:
+      tags: [Categories]
+      summary: 获取分类详情
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 分类详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Category'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Categories]
+      summary: 更新分类
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+      responses:
+        '200':
+          description: 分类更新成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Categories]
+      summary: 删除分类
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 分类删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== Brands ====================
+  /brands:
+    get:
+      tags: [Brands]
+      summary: 获取品牌列表
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [name, created_at, sort_order, product_count]
+            default: name
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 品牌列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Brand'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Brands]
+      summary: 创建品牌
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBrandRequest'
+      responses:
+        '201':
+          description: 品牌创建成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /brands/{id}:
+    get:
+      tags: [Brands]
+      summary: 获取品牌详情
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 品牌详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Brand'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Brands]
+      summary: 更新品牌
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBrandRequest'
+      responses:
+        '200':
+          description: 品牌更新成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Brands]
+      summary: 删除品牌
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 品牌删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /brands/{id}/logo:
+    post:
+      tags: [Brands]
+      summary: 上传品牌 Logo
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                logo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Logo 上传成功
+
+  # ==================== Attributes ====================
+  /attributes:
+    get:
+      tags: [Attributes]
+      summary: 获取属性列表
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [text, select, multiselect, color, number, boolean]
+        - name: isFilterable
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 属性列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Attribute'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Attributes]
+      summary: 创建属性
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [text, select, multiselect, color, number, boolean]
+                options:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                      label:
+                        type: string
+                isRequired:
+                  type: boolean
+                isFilterable:
+                  type: boolean
+                sortOrder:
+                  type: integer
+      responses:
+        '201':
+          description: 属性创建成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /attributes/{id}:
+    get:
+      tags: [Attributes]
+      summary: 获取属性详情
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 属性详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Attribute'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Attributes]
+      summary: 更新属性
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                options:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: 属性更新成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Attributes]
+      summary: 删除属性
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 属性删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /attributes/by-product/{productId}:
+    get:
+      tags: [Attributes]
+      summary: 获取产品的属性列表
+      security: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 产品属性列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Attribute'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  # ==================== Orders ====================
+  /orders:
+    get:
+      tags: [Orders]
+      summary: 获取订单列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, paid, processing, shipped, delivered, cancelled]
+        - name: paymentStatus
+          in: query
+          schema:
+            type: string
+            enum: [unpaid, paid, refunded]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: 搜索订单号或备注
+      responses:
+        '200':
+          description: 订单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Orders]
+      summary: 创建订单
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: 订单创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /orders/analytics:
+    get:
+      tags: [Orders]
+      summary: 获取订单分析数据
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: day
+      responses:
+        '200':
+          description: 订单分析数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/OrderAnalytics'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /orders/export:
+    get:
+      tags: [Orders]
+      summary: 导出订单 CSV
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: CSV 文件下载
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: 获取订单详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 订单详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders/{id}/status:
+    put:
+      tags: [Orders]
+      summary: 更新订单状态
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: 订单状态更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          description: 无效的状态流转
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: 取消订单（含库存回滚）
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: 订单取消成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ==================== Returns ====================
+  /returns:
+    get:
+      tags: [Returns]
+      summary: 获取退货列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, refunding, completed, rejected]
+        - name: orderId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 退货列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReturnRequest'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Returns]
+      summary: 创建退货申请
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReturnRequest'
+      responses:
+        '201':
+          description: 退货申请创建成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /returns/{id}:
+    get:
+      tags: [Returns]
+      summary: 获取退货详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 退货详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReturnRequest'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Returns]
+      summary: 取消退货申请
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 退货申请已取消
+
+  /returns/{id}/process:
+    put:
+      tags: [Returns]
+      summary: 处理退货申请（审批/拒绝/完成）
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [approve, reject, complete]
+                refundAmount:
+                  type: number
+                  format: decimal
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: 退货处理成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ==================== Inventory ====================
+  /inventory/{productId}:
+    get:
+      tags: [Inventory]
+      summary: 获取产品库存
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 库存信息
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      productId:
+                        type: string
+                        format: uuid
+                      available:
+                        type: integer
+                      reserved:
+                        type: integer
+                      total:
+                        type: integer
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    put:
+      tags: [Inventory]
+      summary: 更新库存数量（补货）
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 0
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: 库存更新成功
+
+  /inventory/reserve:
+    post:
+      tags: [Inventory]
+      summary: 预留库存
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [productId, quantity]
+                    properties:
+                      productId:
+                        type: string
+                        format: uuid
+                      quantity:
+                        type: integer
+                        minimum: 1
+                orderId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: 库存预留成功
+        '400':
+          description: 库存不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "ERR_2003"
+                  message: "产品库存不足"
+
+  /inventory/deduct:
+    post:
+      tags: [Inventory]
+      summary: 确认库存扣减
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservationId]
+              properties:
+                reservationId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: 库存扣减成功
+
+  /inventory/release:
+    post:
+      tags: [Inventory]
+      summary: 释放预留库存
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservationId]
+              properties:
+                reservationId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: 库存释放成功
+
+  /inventory/check:
+    post:
+      tags: [Inventory]
+      summary: 批量检查库存可用性
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      productId:
+                        type: string
+                        format: uuid
+                      quantity:
+                        type: integer
+      responses:
+        '200':
+          description: 库存检查结果
+
+  /inventory/alerts/low-stock:
+    get:
+      tags: [Inventory]
+      summary: 获取低库存预警
+      parameters:
+        - name: threshold
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: 低库存产品列表
+
+  # ==================== Flash Sales ====================
+  /flash-sales:
+    get:
+      tags: [Flash Sales]
+      summary: 获取秒杀活动列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, active, ended]
+      responses:
+        '200':
+          description: 秒杀活动列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FlashSale'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Flash Sales]
+      summary: 创建秒杀活动
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFlashSaleRequest'
+      responses:
+        '201':
+          description: 秒杀活动创建成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /flash-sales/{id}:
+    get:
+      tags: [Flash Sales]
+      summary: 获取秒杀活动详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 秒杀活动详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/FlashSale'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Flash Sales]
+      summary: 更新秒杀活动
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFlashSaleRequest'
+      responses:
+        '200':
+          description: 秒杀活动更新成功
+    delete:
+      tags: [Flash Sales]
+      summary: 删除秒杀活动
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 秒杀活动删除成功
+
+  /flash-sales/{id}/status:
+    put:
+      tags: [Flash Sales]
+      summary: 更新秒杀活动状态
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, active, ended]
+      responses:
+        '200':
+          description: 状态更新成功
+
+  /flash-sales/{id}/products:
+    post:
+      tags: [Flash Sales]
+      summary: 添加秒杀商品
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, flashPrice, stockLimit]
+              properties:
+                productId:
+                  type: string
+                  format: uuid
+                flashPrice:
+                  type: number
+                  format: decimal
+                stockLimit:
+                  type: integer
+                  minimum: 1
+                sortOrder:
+                  type: integer
+      responses:
+        '201':
+          description: 秒杀商品添加成功
+
+  /flash-sales/{id}/products/{productId}:
+    delete:
+      tags: [Flash Sales]
+      summary: 移除秒杀商品
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 秒杀商品移除成功
+
+  /flash-sales/{id}/products/{productId}/deduct:
+    post:
+      tags: [Flash Sales]
+      summary: 原子性扣减秒杀库存（Lua 脚本）
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, quantity]
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: 库存扣减成功
+        '400':
+          description: 库存不足或重复购买
+
+  /flash-sales/{id}/products/{productId}/check-purchase:
+    get:
+      tags: [Flash Sales]
+      summary: 检查用户是否已参与秒杀
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 购买检查结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      hasPurchased:
+                        type: boolean
+
+  # ==================== Coupons ====================
+  /coupons:
+    get:
+      tags: [Coupons]
+      summary: 获取优惠券列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [fixed, percentage]
+      responses:
+        '200':
+          description: 优惠券列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Coupon'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Coupons]
+      summary: 创建优惠券
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCouponRequest'
+      responses:
+        '201':
+          description: 优惠券创建成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /coupons/validate:
+    post:
+      tags: [Coupons]
+      summary: 验证优惠券
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, orderAmount]
+              properties:
+                code:
+                  type: string
+                orderAmount:
+                  type: number
+                  format: decimal
+      responses:
+        '200':
+          description: 优惠券验证结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      valid:
+                        type: boolean
+                      discount:
+                        type: number
+                        format: decimal
+                      coupon:
+                        $ref: '#/components/schemas/Coupon'
+        '400':
+          description: 优惠券无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "ERR_5008"
+                  message: "优惠券使用条件不满足"
+
+  /coupons/{id}:
+    get:
+      tags: [Coupons]
+      summary: 获取优惠券详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 优惠券详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Coupon'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Coupons]
+      summary: 更新优惠券
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCouponRequest'
+      responses:
+        '200':
+          description: 优惠券更新成功
+    delete:
+      tags: [Coupons]
+      summary: 删除优惠券
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 优惠券删除成功
+
+  /coupons/{id}/status:
+    put:
+      tags: [Coupons]
+      summary: 切换优惠券状态
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isActive]
+              properties:
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: 状态切换成功
+
+  /coupons/{id}/stats:
+    get:
+      tags: [Coupons]
+      summary: 获取优惠券使用统计
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 优惠券统计数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CouponStats'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /coupons/{id}/usage:
+    get:
+      tags: [Coupons]
+      summary: 获取优惠券使用记录
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: 优惠券使用记录
+
+  # ==================== Recommendations ====================
+  /recommendations:
+    get:
+      tags: [Recommendations]
+      summary: 获取推荐位列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [brand, new, popular, topic]
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: 推荐位列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Recommendation'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Recommendations]
+      summary: 创建推荐位
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [brand, new, popular, topic]
+                productId:
+                  type: string
+                  format: uuid
+                sortOrder:
+                  type: integer
+                isActive:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: 推荐位创建成功
+
+  /recommendations/types:
+    get:
+      tags: [Recommendations]
+      summary: 获取推荐类型列表
+      responses:
+        '200':
+          description: 推荐类型列表
+
+  /recommendations/sort-order:
+    put:
+      tags: [Recommendations]
+      summary: 批量更新推荐位排序
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      sortOrder:
+                        type: integer
+      responses:
+        '200':
+          description: 排序更新成功
+
+  /recommendations/{id}:
+    get:
+      tags: [Recommendations]
+      summary: 获取推荐位详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 推荐位详情
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Recommendations]
+      summary: 更新推荐位
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                sortOrder:
+                  type: integer
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: 推荐位更新成功
+    delete:
+      tags: [Recommendations]
+      summary: 删除推荐位
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 推荐位删除成功
+
+  /recommendations/{id}/products:
+    post:
+      tags: [Recommendations]
+      summary: 添加推荐商品
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productIds]
+              properties:
+                productIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: 商品添加成功
+
+  /recommendations/{id}/products/{productId}:
+    delete:
+      tags: [Recommendations]
+      summary: 移除推荐商品
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 商品移除成功
+
+  # ==================== Advertisements ====================
+  /advertisements:
+    get:
+      tags: [Advertisements]
+      summary: 获取广告列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: position
+          in: query
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: 广告列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Advertisement'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Advertisements]
+      summary: 创建广告
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdvertisementRequest'
+      responses:
+        '201':
+          description: 广告创建成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /advertisements/position/{position}:
+    get:
+      tags: [Advertisements]
+      summary: 按位置获取广告
+      parameters:
+        - name: position
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 指定位置的广告列表
+
+  /advertisements/{id}:
+    get:
+      tags: [Advertisements]
+      summary: 获取广告详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 广告详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Advertisement'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Advertisements]
+      summary: 更新广告
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdvertisementRequest'
+      responses:
+        '200':
+          description: 广告更新成功
+    delete:
+      tags: [Advertisements]
+      summary: 删除广告
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 广告删除成功
+
+  /advertisements/{id}/click:
+    post:
+      tags: [Advertisements]
+      summary: 记录广告点击
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 点击记录成功
+
+  /advertisements/{id}/view:
+    post:
+      tags: [Advertisements]
+      summary: 记录广告展示
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 展示记录成功
+
+  # ==================== Users ====================
+  /users:
+    get:
+      tags: [Users]
+      summary: 获取用户列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, banned]
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: 搜索用户名或邮箱
+      responses:
+        '200':
+          description: 用户列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Users]
+      summary: 创建用户
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: 用户创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 用户名或邮箱已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "ERR_4003"
+                  message: "用户已存在"
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: 获取用户详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 用户详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Users]
+      summary: 更新用户
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, inactive, banned]
+                roleIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: 用户更新成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Users]
+      summary: 删除用户
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 用户删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== Roles ====================
+  /roles:
+    get:
+      tags: [Roles]
+      summary: 获取角色列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: 角色列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Role'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Roles]
+      summary: 创建角色
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: "editor"
+                description:
+                  type: string
+                permissionIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: 角色创建成功
+
+  /roles/permissions:
+    get:
+      tags: [Roles]
+      summary: 获取所有权限列表（角色路由下）
+      responses:
+        '200':
+          description: 权限列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permission'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /roles/{id}:
+    get:
+      tags: [Roles]
+      summary: 获取角色详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 角色详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Role'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Roles]
+      summary: 更新角色
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                permissionIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: 角色更新成功
+    delete:
+      tags: [Roles]
+      summary: 删除角色
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 角色删除成功
+
+  /permissions:
+    get:
+      tags: [Roles]
+      summary: 获取所有权限列表
+      responses:
+        '200':
+          description: 权限列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permission'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  # ==================== Menus ====================
+  /menus:
+    get:
+      tags: [Menus]
+      summary: 获取菜单列表
+      responses:
+        '200':
+          description: 菜单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Menu'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      tags: [Menus]
+      summary: 创建菜单
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, path]
+              properties:
+                name:
+                  type: string
+                  example: "产品管理"
+                path:
+                  type: string
+                  example: "/products"
+                icon:
+                  type: string
+                  example: "Package"
+                parentId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                sortOrder:
+                  type: integer
+                permissionKey:
+                  type: string
+                  example: "products:read"
+                isActive:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: 菜单创建成功
+
+  /menus/tree:
+    get:
+      tags: [Menus]
+      summary: 获取菜单树形结构
+      responses:
+        '200':
+          description: 菜单树
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Menu'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /menus/{id}:
+    put:
+      tags: [Menus]
+      summary: 更新菜单
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                path:
+                  type: string
+                icon:
+                  type: string
+                parentId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                sortOrder:
+                  type: integer
+                permissionKey:
+                  type: string
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: 菜单更新成功
+    delete:
+      tags: [Menus]
+      summary: 删除菜单
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 菜单删除成功
+
+  # ==================== Audit Logs ====================
+  /audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: 获取审计日志列表
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: userId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: 操作类型（create, update, delete 等）
+        - name: resource
+          in: query
+          schema:
+            type: string
+          description: 资源类型（products, orders 等）
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 审计日志列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AuditLog'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /audit-logs/{id}:
+    get:
+      tags: [Audit Logs]
+      summary: 获取审计日志详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 审计日志详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AuditLog'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== Dashboard ====================
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: 获取仪表板统计数据
+      responses:
+        '200':
+          description: 统计数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/DashboardStats'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+              example:
+                success: true
+                data:
+                  totalSales: 158900.50
+                  totalOrders: 1250
+                  totalUsers: 380
+                  totalProducts: 520
+                  salesGrowth: 12.5
+                  ordersGrowth: 8.3
+                  usersGrowth: 5.2
+                meta:
+                  timestamp: "2026-03-06T10:00:00Z"
+                  requestId: "550e8400-e29b-41d4-a716-446655440000"
+                  version: "v1"
+
+  /dashboard/sales-trend:
+    get:
+      tags: [Dashboard]
+      summary: 获取销售趋势
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: day
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 销售趋势数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SalesTrend'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /dashboard/order-status:
+    get:
+      tags: [Dashboard]
+      summary: 获取订单状态分布
+      responses:
+        '200':
+          description: 订单状态分布
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+              example:
+                success: true
+                data:
+                  pending: 45
+                  confirmed: 30
+                  paid: 120
+                  processing: 85
+                  shipped: 200
+                  delivered: 650
+                  cancelled: 20
+
+  /dashboard/top-products:
+    get:
+      tags: [Dashboard]
+      summary: 获取热销商品排行榜
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: 热销商品列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TopProduct'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /dashboard/recent-orders:
+    get:
+      tags: [Dashboard]
+      summary: 获取最近订单
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 最近订单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  # ==================== Health ====================
+  /health:
+    get:
+      tags: [Health]
+      summary: 健康检查
+      security: []
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
